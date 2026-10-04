@@ -198,11 +198,15 @@ async def _send(
         # The person's own switch stands in for their tap: it must still be
         # on, for this kind of sender, and the API must still be able to tie
         # it to them.
-        kind = handle_it.kind_for(str(payload.get("handled_as") or "stranger"))
-        if (
-            getattr(instance, "gate_mode", "") != "auto_execute"
-            or handle_it.get(person.id).level(kind) != handle_it.LEVEL_HANDLE
-        ):
+        handled_as = str(payload.get("handled_as") or "stranger")
+        stored = handle_it.get(person.id)
+        # Take the lead as you lifts the setting (its added rules were
+        # checked when the card was made).
+        allowed = (stored.enabled and handle_it.leading(person.id)) or (
+            stored.follows_up(handled_as) if payload.get("source") == "follow_up"
+            else stored.level(handle_it.kind_for(handled_as)) == handle_it.LEVEL_HANDLE
+        )
+        if getattr(instance, "gate_mode", "") != "auto_execute" or not allowed:
             raise SendRefused(409, "handle_it_off", "Handle it for me is off for this reply.")
         if not handle_it.signing_ok():
             raise SendRefused(409, "caller_signing_required", handle_it.REASONS["signing_off"])
